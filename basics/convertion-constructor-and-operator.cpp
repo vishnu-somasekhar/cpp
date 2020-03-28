@@ -35,6 +35,8 @@ int main()
     std::cout<< "str1 = " << str1 <<endl;
     i = 20;
     std::cout<< "i = " << i.get() <<endl;
+
+    //! always use static cast for conversion operator and converstion constructor
     string str2 = static_cast<string>(i);
     std::cout<< "str2 = " << str2 <<endl;
     i = static_cast<Int>(30);
