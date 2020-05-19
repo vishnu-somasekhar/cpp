@@ -13,6 +13,17 @@ mutex m;
 deque<int> buffer;
 const int max_buffer_size = 50;
 
+class VVV
+{
+    int a;
+    public:
+    VVV(int x):a(x){}
+
+    int operator()(int a)const
+    {
+        return this->a*a;
+    }
+};
 
 void producer(int icount)
 {

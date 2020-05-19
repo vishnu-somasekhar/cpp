@@ -19,26 +19,33 @@ Node* newNode(int key)
 
 void detectLoop(Node* head)
 {
-    struct Node* slow = head;
-    struct Node* fast = head->pNext;
-
-    while(fast && fast->pNext) {
-
-        if(slow == fast)
+     Node *slow_p = head, *fast_p = head; 
+  
+    while (slow_p && fast_p && fast_p->pNext) { 
+        slow_p = slow_p->pNext; 
+        fast_p = fast_p->pNext->pNext; 
+        if (slow_p == fast_p) { 
+            cout << "Found Loop "<<slow_p->data<<endl; ; 
             break;
-        
-        slow = slow->pNext;
-        fast = fast->pNext->pNext;
-    }
 
-    if(slow == fast)
-    {
-        while(fast->pNext == slow)
-            fast = fast->pNext;
+            //return 1; 
+        } 
+    } 
 
-        fast->pNext = NULL;
-    }
+    Node* ptr1 = head;
+    Node* ptr2;
+while(1)
+{
+ptr2 = slow_p;
 
+while(ptr2->pNext != slow_p && ptr2->pNext != ptr1)
+    ptr2 = ptr2->pNext;
+
+    if(ptr2->pNext == ptr1)
+        break;
+    ptr1= ptr1->pNext;
+}
+    ptr2->pNext = NULL;
 }
 
 // A utility function to print a linked list 
@@ -58,10 +65,10 @@ int main()
     head->pNext = newNode(20); 
     head->pNext->pNext = newNode(15); 
     head->pNext->pNext->pNext = newNode(4); 
-    head->pNext->pNext->pNext->pNext = newNode(10); 
+   // head->pNext->pNext->pNext->pNext = newNode(10); 
   
     /* Create a loop for testing */
-    head->pNext->pNext->pNext->pNext->pNext = head->pNext->pNext; 
+    head->pNext->pNext->pNext->pNext  = head->pNext; //->pNext->pNext = head->pNext->pNext; 
   
     detectLoop(head);
     printf("Linked List after removing loop \n"); 
