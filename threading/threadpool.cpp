@@ -1,125 +1,179 @@
 #include <iostream>
 #include <thread>
-#include <functional>
-#include <future>
-#include <mutex>
-#include <vector>
 #include <condition_variable>
+#include <mutex>
+#include <future>
+#include <vector>
+#include <functional>
 #include <queue>
+#include <chrono>
 
 
-
-class ThreadPool{
-
+class ThreadPool
+{
 public:
-    explicit ThreadPool(int iNumThreads)
+
+    using Task = std::function<void()>;
+
+    explicit ThreadPool(int iCount)
     {
-        start(iNumThreads);
+        Start(iCount);
     }
 
     ~ThreadPool()
     {
-        stop();
+        Stop();
     }
 
-    using Task = std::function<void()>;
-
-    template<typename T>
-    auto enqueue(T task)->std::future<decltype(task())>
+    void Start(int iCount)
     {
+        for(int i = 0; i < iCount; i++)
         {
-            std::unique_lock<std::mutex> lock(mMutex);
-            mTasks.emplace(task);
-        }
+            m_threads.emplace_back([=]{
 
-        mConditionVariable.notify_one();
-    }
-
-
-private:
-
-    std::vector<std::thread> mThreads;
-    std::condition_variable mConditionVariable;
-    std::mutex mMutex;
-    bool mStopped{false};
-    std::queue<Task> mTasks;
-
-    void start(int iNumberThreads)
-    {
-        for(auto i = 0; i < iNumberThreads; i++)
-        {
-            mThreads.emplace_back([=]{
                 while(true)
                 {
                     Task task;
                     {
-                        std::unique_lock<std::mutex> lock(mMutex);
-                        mConditionVariable.wait(lock, [=]{return mStopped || !mTasks.empty();} );
+                        std::unique_lock<std::mutex> lock(mx);
 
-                        if(mStopped && mTasks.empty())
+                        cv.wait(lock, [=]{
+                            return bStop || !m_task.empty();
+                        });
+                        
+                        if(bStop && m_task.empty())
                             break;
 
-                        task = std::move(mTasks.front());
-                        mTasks.pop();
-                    }    
+                        task = std::move(m_task.front());
+                        m_task.pop();
+                    }
 
                     task();
                     
+                    
                 }
+
             });
         }
+
     }
 
-    void stop() noexcept
+    void Stop() noexcept
     {
         {
-            std::unique_lock<std::mutex> lock(mMutex);
-            mStopped = true;
+            std::unique_lock<std::mutex> lock(mx);
+            bStop = true;    
         }
 
-        mConditionVariable.notify_all();
+        cv.notify_all();
 
-        for(auto &thread : mThreads)
+        for(auto &thread : m_threads)
             thread.join();
+
     }
+
+    template<typename T>
+    auto enqueue(T t)->std::future<decltype(t())>
+    {
+        auto wrapper = std::make_shared<std::packaged_task<decltype(t()) ()>>(std::move(t));
+        {
+            std::unique_lock<std::mutex> lock(mx);
+
+            m_task.emplace([=]{
+                (*wrapper)();
+            });
+        }
+        cv.notify_one();
+
+        return wrapper->get_future();
+        
+    }
+
+private:
+
+    std::vector<std::thread> m_threads;
+    std::condition_variable cv;
+    std::mutex mx;
+    bool bStop{false};
+    std::queue<Task> m_task;
+
 
 };
 
+
 int main()
 {
-    ThreadPool pool{4};
-    
-    pool.enqueue([]{
-        using namespace std::chrono_literals;
-        std::cout<<"Print from task 1 start"<<std::endl;
-        std::this_thread::sleep_for(2s);
-        std::cout<<"Print from task 1 ends"<<std::endl;
+    {
+    ThreadPool tp{4};
+
+    auto r1 = tp.enqueue([]{
+
+        std::cout<<"inside thread 1"<<std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::cout<<"inside thread 1 END"<<std::endl;
+        return 1;
     });
 
-     pool.enqueue([]{
-        using namespace std::chrono_literals;
-        std::cout<<"Print from task 2 start"<<std::endl;
-        std::this_thread::sleep_for(2s);
-        std::cout<<"Print from task 2 ends"<<std::endl;
+    auto r2 = tp.enqueue([]{
+
+        std::cout<<"inside thread  2"<<std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(4));
+        std::cout<<"inside thread 2 END"<<std::endl;
+        return 2;
     });
-    pool.enqueue([]{
-        using namespace std::chrono_literals;
-        std::cout<<"Print from task 3 start"<<std::endl;
-        std::this_thread::sleep_for(2s);
-        std::cout<<"Print from task 3 ends"<<std::endl;
+
+    auto r3 = tp.enqueue([]{
+
+        std::cout<<"inside thread 3"<<std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::cout<<"inside thread 3 END"<<std::endl;
+        return 3;
     });
-    pool.enqueue([]{
-        using namespace std::chrono_literals;
-        std::cout<<"Print from task 4 start"<<std::endl;
-        std::this_thread::sleep_for(2s);
-        std::cout<<"Print from task 4 ends"<<std::endl;
+
+    auto r4 = tp.enqueue([]{
+
+        std::cout<<"inside thread  4"<<std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::cout<<"inside thread 4 END"<<std::endl;
+        return 4;
     });
-    pool.enqueue([]{
-        using namespace std::chrono_literals;
-        std::cout<<"Print from task 5 start"<<std::endl;
-        std::this_thread::sleep_for(2s);
-        std::cout<<"Print from task 5 ends"<<std::endl;
+
+        auto r5 = tp.enqueue([]{
+
+        std::cout<<"inside thread 5"<<std::endl;
+         std::this_thread::sleep_for(std::chrono::seconds(3));
+         std::cout<<"inside thread 5 END"<<std::endl;
+        return 5;
     });
+
+    auto r6 = tp.enqueue([]{
+
+        std::cout<<" inside thread 6"<<std::endl;
+         std::this_thread::sleep_for(std::chrono::seconds(4));
+         std::cout<<"inside thread 6 END"<<std::endl;
+        return 6;
+    });
+
+        auto r7 = tp.enqueue([]{
+
+        std::cout<<"inside thread 7"<<std::endl;
+         std::this_thread::sleep_for(std::chrono::seconds(5));
+         std::cout<<"inside thread 7 END"<<std::endl;
+        return 7;
+    });
+
+    auto r8 = tp.enqueue([]{
+
+        std::cout<<"inside thread  8"<<std::endl;
+         std::this_thread::sleep_for(std::chrono::seconds(2));
+         std::cout<<"inside thread 8 END"<<std::endl;
+        return 8;
+    });
+
+    std::cout<< r1.get() + r2.get() + r3.get() + r4.get() + r5.get() + r6.get() + r7.get() + r8.get() << std::endl;
+    }
+
 
     return 0;
+
 }
